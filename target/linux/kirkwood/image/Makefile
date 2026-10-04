@@ -291,8 +291,7 @@ define Device/lacie_cloudbox
   DEVICE_VENDOR := LaCie
   DEVICE_MODEL := CloudBox
   DEVICE_DTS := kirkwood-cloudbox
-  DEVICE_PACKAGES := kmod-gpio-button-hotplug kmod-rtc-mv luci \
-	ksmbd-server luci-app-ksmbd nfs-kernel-server
+  DEVICE_PACKAGES := kmod-gpio-button-hotplug kmod-rtc-mv
   KERNEL_IN_UBI :=
   KERNEL_INSTALL := 1
   IMAGES :=
