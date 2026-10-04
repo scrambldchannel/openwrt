@@ -283,6 +283,18 @@ define Device/iptime_nas1
 endef
 TARGET_DEVICES += iptime_nas1
 
+define Device/lacie_cloudbox
+  DEVICE_VENDOR := LaCie
+  DEVICE_MODEL := CloudBox
+  DEVICE_DTS := kirkwood-cloudbox
+  DEVICE_PACKAGES := kmod-ata-marvell-sata kmod-fs-ext4 \
+	kmod-gpio-button-hotplug kmod-rtc-mv luci
+  KERNEL_IN_UBI :=
+  IMAGES :=
+  SUPPORTED_DEVICES += lacie,cloudbox
+endef
+TARGET_DEVICES += lacie_cloudbox
+
 define Device/linksys
   $(Device/kernel-size-migration-linksys)
   DEVICE_VENDOR := Linksys

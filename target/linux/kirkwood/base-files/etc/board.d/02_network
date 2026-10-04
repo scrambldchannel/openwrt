@@ -43,6 +43,9 @@ kirkwood_setup_interfaces()
 	iom,ix4-200d)
 		ucidef_set_interface_lan "eth0 eth1" "dhcp"
 		;;
+	lacie,cloudbox)
+		ucidef_set_interface_lan "eth0"
+		;;
 	linksys,e4200-v2|\
 	linksys,ea3500|\
 	linksys,ea4500)
