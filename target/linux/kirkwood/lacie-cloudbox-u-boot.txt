@@ -1,0 +1,93 @@
+# strings /tmp/u-boot.bin from mtd0 "u-boot" (512 KiB SPI NOR)
+# grep -E 'bootcmd|primaryPart|secondaryPart|boot_disk|root='
+#
+# strings printed this block twice; the two copies match, so only one is
+# kept here. Names such as legacy_boot, disk_list, nexus_nv_part,
+# nexus_boot_part, nexus_can_boot, nexus_inc_count, nexus_rescue_countfail
+# and nexus_rescue_bootargs are used below but their definitions were not
+# in this extract.
+
+# bootcmd runs first. Nexus is the current layout. If that returns, the
+# older raw-partition layout runs. bootm does not return when a kernel
+# actually starts, so legacy_boot is the fallback for a disk Nexus cannot use.
+bootcmd=run nexus_boot; run legacy_boot
+
+# --- Nexus layout --------------------------------------------------------
+# The kernel is a file, /boot/uImage, on an ext2 partition. The root is
+# selected by UUID rather than by a fixed /dev/sdaN node.
+
+# Read boot_count and saved_entry from the file /ubootenv on the nv partition.
+nexus_load_flags=ext2get ide ${boot_disk}:${nexus_nv_part} /ubootenv boot_count saved_entry
+
+# Write boot_count back to that same file.
+nexus_save_flags=ext2set ide ${boot_disk}:${nexus_nv_part} /ubootenv boot_count ${boot_count}
+
+# saved_entry picks the root. 1 means partition 5, anything else partition 4.
+# Those are the two system slots. Partition 5 is the one an upgrade would boot.
+nexus_set_root=if test $saved_entry -eq 1; then root_part=5; else root_part=4; fi
+
+# Load ${image} from the selected root and accept it only if it is a uImage.
+nexus_load_image=ext2load ide ${boot_disk}:${root_part} ${loadaddr} ${image} && iminfo ${loadaddr}
+
+# Remember the filesystem UUID of the boot partition and of the root partition.
+nexus_uuid=ext2uuid ide ${boot_disk}:${nexus_boot_part}; boot_uuid=${uuid}; ext2uuid ide ${boot_disk}:${root_part}; root_uuid=${uuid}
+
+# Kernel command line identifies both filesystems by those UUIDs.
+nexus_bootargs=run nexus_uuid; setenv bootargs ${console} boot=UUID=${boot_uuid} root=UUID=${root_uuid}
+
+# Partition 3 holds /ubootenv. rescue=1 there means the user asked for rescue.
+nexus_rescue_user=ext2get ide ${boot_disk}:3 /ubootenv rescue && test ${rescue} -eq 1
+
+# Rescue ignores the selected root and loads /rescue/uImage from partition 2.
+# panic is set only after every normal attempt has failed; in that case the
+# command line keeps whatever bootargs already exist and appends the rescue
+# root UUID. Otherwise it builds the normal UUID command line first.
+# nexus_rescue_bootargs is not in this extract.
+nexus_boot_rescue=echo Boot Nexus rescue from disk ${boot_disk}...; root_part=2; image=/rescue/uImage; if run nexus_load_image; then if test -n ${panic}; then run nexus_uuid; setenv bootargs ${bootargs} root=UUID=${root_uuid}; else run nexus_bootargs; fi; run nexus_rescue_bootargs; bootm; fi
+
+# Last resort: mark the boot as failed and try the rescue image on every disk.
+nexus_panic=panic=1; for boot_disk in ${disk_list}; do run nexus_boot_rescue; done
+
+# For each disk in disk_list:
+#   Read the nv flags. A disk with no /ubootenv is skipped.
+#   nexus_rescue_countfail sets countfail when the saved boot count is too high.
+#   Choose partition 4 or 5, then try to load /boot/uImage from it.
+#   A missing or invalid image sets bootfail. rescue=1 on partition 3 sets user.
+#   nexus_can_boot is the gate for a normal start. Its definition is not in
+#   this extract; the call site shows that a start only happens when it succeeds.
+#   On success the boot count is incremented and saved, then bootm is tried.
+#   bootm returns here only when the image did not start, and rescue runs next.
+#   Rescue also runs when nexus_can_boot fails.
+# After every disk has failed, panic=1 and rescue is tried once more.
+# resetFlag_env, when set, is copied to forced. Whatever consumes forced is
+# not in this extract.
+nexus_boot=test -n ${resetFlag_env} && forced=${resetFlag_env}; for boot_disk in ${disk_list}; do echo Booting Nexus layout from disk ${boot_disk}...; countfail=0; bootfail=0; user=0; if run nexus_load_flags; then run nexus_rescue_countfail && countfail=1; run nexus_set_root; image=/boot/uImage; run nexus_load_image || bootfail=1; run nexus_rescue_user && user=1; if run nexus_can_boot; then run nexus_inc_count; run nexus_save_flags; run nexus_bootargs; bootm; bootfail=1; fi; run nexus_boot_rescue; fi; done; bootfail=1; countfail=; user=;run nexus_panic
+
+# --- Legacy layout -------------------------------------------------------
+# Used when Nexus returns. The kernel is a raw uImage at the start of a
+# partition, loaded by the disk command, not a file on a filesystem.
+# The root node is fixed: disk 0 is /dev/sda7, disk 1 is /dev/sdb7.
+
+legacy_set_rootfs=if test $boot_disk -eq 0; then rootfs=/dev/sda7; elif test $boot_disk -eq 1; then rootfs=/dev/sdb7; fi
+
+legacy_disk_bootargs=setenv bootargs ${console} reset=${resetFlag_env} root=${rootfs};
+
+# resetFlag_env nonzero: try partition 6 only.
+# Otherwise try partition A (10) first, then partition 6.
+# The first partition that holds a loadable image is booted, with root on
+# partition 7 of that same disk. bootcmd calls this through legacy_boot,
+# whose definition was not in this extract.
+legacy_disk_boot=echo Booting legacy layout...; if test ${resetFlag_env} -ne 0; then part_list=6; else part_list="A 6"; fi;for p in ${part_list}; do for boot_disk in ${disk_list}; do if disk ${loadaddr} ${boot_disk}:$p; then run legacy_set_rootfs; run legacy_disk_bootargs; bootm; fi; done; done
+
+# --- Stock Marvell environment, not the CloudBox boot path ---------------
+# These strings are the generic defaults compiled into this U-Boot. bootcmd
+# above replaces them. Nothing in nexus_boot or legacy_disk_boot runs them.
+
+setenv bootargs nfsroot=$(netbsd_server):$(rootpath) fs=$(netbsd_fs) ip=$(netbsd_ip) serverip=$(netbsd_server) mask=$(netbsd_mask) gw=$(netbsd_gw) rootdev=$(netbsd_rootdev) ethaddr=$(ethaddr) eth1addr=$(eth1addr) ethmtu=$(ethmtu) eth1mtu=$(eth1mtu) $(netbsd_netconfig)
+netbsd_bootcmd
+root=/dev/nfs rw
+bootargs_root=root=/dev/nfs rw
+tftpboot 0x2000000 $(image_name); setenv bootargs $(console) $(bootargs_root) nfsroot=$(serverip):$(rootpath) ip=$(ipaddr):$(serverip)$(bootargs_end) video=dovefb:lcd0:$(lcd0_params) clcd.lcd0_enable=$(lcd0_enable);  bootm 0x2000000;
+fsload 0x2000000 $(image_name);setenv bootargs $(console) root=/dev/mtdblock0 rw ip=$(ipaddr):$(serverip)$(bootargs_end); bootm 0x2000000;
+standalone=fsload 0x2000000 $(image_name);setenv bootargs $(console) root=/dev/mtdblock0 rw ip=$(ipaddr):$(serverip)$(bootargs_end); bootm 0x2000000;
+root=%s%d ro
