@@ -13,6 +13,10 @@ platform_check_image() {
 		cp /proc/mounts /tmp/mounts
 		return 0
 		;;
+	lacie,cloudbox)
+		cloudbox_check_image "$1"
+		return $?
+		;;
 	*)
 		return 0
 		;;
@@ -42,8 +46,19 @@ platform_do_upgrade() {
 	linksys,ea4500)
 		platform_do_upgrade_linksys "$1"
 		;;
+	lacie,cloudbox)
+		platform_do_upgrade_cloudbox "$1"
+		;;
 	*)
 		nand_do_upgrade "$1"
+		;;
+	esac
+}
+
+platform_copy_config() {
+	case "$(board_name)" in
+	lacie,cloudbox)
+		platform_copy_config_cloudbox
 		;;
 	esac
 }

@@ -9,5 +9,9 @@ boot() {
 	linksys,ea4500)
 		mtd resetbc s_env || true
 		;;
+	lacie,cloudbox)
+		. /lib/upgrade/cloudbox.sh
+		cloudbox_clear_boot_count || true
+		;;
 	esac
 }

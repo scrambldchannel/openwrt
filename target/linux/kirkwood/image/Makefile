@@ -287,6 +287,19 @@ define Build/cloudbox-rootfs-tar
 	$(call Image/mkfs/targz,$(if $(TARGET_PER_DEVICE_ROOTFS),pkg=$(ROOTFS_ID/lacie_cloudbox)))
 endef
 
+# Pack a gzip root archive, not the squashfs image. U-Boot reads the
+# slot with ext2load, so the installed root is an unpacked ext filesystem.
+define Build/cloudbox-sysupgrade-tar
+	$(call Image/mkfs/targz,$(if $(TARGET_PER_DEVICE_ROOTFS),pkg=$(ROOTFS_ID/lacie_cloudbox)))
+	mv $@ $@.rootfs.tar.gz
+	sh $(TOPDIR)/scripts/sysupgrade-tar.sh \
+		--board $(if $(BOARD_NAME),$(BOARD_NAME),$(DEVICE_NAME)) \
+		--kernel $(IMAGE_KERNEL) \
+		--rootfs $@.rootfs.tar.gz \
+		$@
+	rm -f $@.rootfs.tar.gz
+endef
+
 define Device/lacie_cloudbox
   DEVICE_VENDOR := LaCie
   DEVICE_MODEL := CloudBox
@@ -294,16 +307,13 @@ define Device/lacie_cloudbox
   DEVICE_PACKAGES := kmod-gpio-button-hotplug kmod-rtc-mv
   KERNEL_IN_UBI :=
   KERNEL_INSTALL := 1
-  IMAGES :=
+  IMAGES := sysupgrade.bin
+  IMAGE/sysupgrade.bin := cloudbox-sysupgrade-tar | append-metadata
   ARTIFACTS := rootfs.tar.gz
   ARTIFACT/rootfs.tar.gz := cloudbox-rootfs-tar
   SUPPORTED_DEVICES += lacie,cloudbox
 endef
 TARGET_DEVICES += lacie_cloudbox
-
-# The rootfs artifact depends on this target. IMAGES is empty, so nothing else creates it.
-lacie_cloudbox-images:
-	@:
 
 define Device/linksys
   $(Device/kernel-size-migration-linksys)
