@@ -283,6 +283,28 @@ define Device/iptime_nas1
 endef
 TARGET_DEVICES += iptime_nas1
 
+define Build/cloudbox-rootfs-tar
+	$(call Image/mkfs/targz,$(if $(TARGET_PER_DEVICE_ROOTFS),pkg=$(ROOTFS_ID/lacie_cloudbox)))
+endef
+
+define Device/lacie_cloudbox
+  DEVICE_VENDOR := LaCie
+  DEVICE_MODEL := CloudBox
+  DEVICE_DTS := kirkwood-cloudbox
+  DEVICE_PACKAGES := kmod-gpio-button-hotplug kmod-rtc-mv
+  KERNEL_IN_UBI :=
+  KERNEL_INSTALL := 1
+  IMAGES :=
+  ARTIFACTS := rootfs.tar.gz
+  ARTIFACT/rootfs.tar.gz := cloudbox-rootfs-tar
+  SUPPORTED_DEVICES += lacie,cloudbox
+endef
+TARGET_DEVICES += lacie_cloudbox
+
+# The rootfs artifact depends on this target. IMAGES is empty, so nothing else creates it.
+lacie_cloudbox-images:
+	@:
+
 define Device/linksys
   $(Device/kernel-size-migration-linksys)
   DEVICE_VENDOR := Linksys
